@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>COMBATE DE TANQUES</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{height:100%;overflow:hidden;overscroll-behavior:none;}
+  body{background:#1a1408;color:#e8d590;font-family:'Courier New',monospace;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;
+    padding:8px;touch-action:none;user-select:none;-webkit-user-select:none;}
+  h1{font-size:clamp(17px,3.2vw,32px);letter-spacing:5px;text-shadow:3px 3px 0 #7a5c1e;}
+  .sub{color:#a8904f;font-size:clamp(9px,1.3vw,11px);letter-spacing:3px;margin:3px 0 10px;}
+
+  .screen{background:#2b2210;border:4px solid #7a5c1e;padding:14px 20px;text-align:center;
+          max-width:min(820px,96vw);max-height:95dvh;overflow-y:auto;}
+  #gameover{display:none;}
+  .row{display:flex;gap:8px;justify-content:center;margin:6px 0 10px;flex-wrap:wrap;}
+  .lbl{font-size:clamp(10px,1.4vw,13px);letter-spacing:2px;color:#a8904f;margin-top:8px;}
+
+  button{font-family:inherit;font-size:clamp(11px,1.5vw,15px);font-weight:bold;letter-spacing:1px;
+    background:#e8d590;color:#2b2210;border:none;border-bottom:5px solid #7a5c1e;
+    padding:8px 14px;cursor:pointer;touch-action:manipulation;}
+  button:hover{background:#fff2b8;}
+  button:active{border-bottom-width:2px;transform:translateY(3px);}
+  button.sel{background:#d9822b;color:#fff;border-bottom-color:#8a4a10;}
+  .big{font-size:clamp(14px,2vw,19px);padding:11px 24px;}
+
+  table.ctrl{margin:6px auto;border-collapse:collapse;font-size:clamp(9px,1.3vw,12px);}
+  table.ctrl td,table.ctrl th{border:1px solid #7a5c1e;padding:3px 9px;}
+  table.ctrl th{background:#3a2d14;}
+  .p0{color:#e05d3a;}.p1{color:#5a8fe0;}.p2{color:#4a9c30;}.p3{color:#c8a010;}
+  .hint{font-size:clamp(9px,1.1vw,11px);color:#8a7440;margin-top:8px;line-height:1.6;}
+  #pads{font-size:clamp(9px,1.3vw,12px);color:#a8904f;min-height:16px;margin-top:4px;}
+
+  #wrap{position:relative;display:none;flex-direction:column;align-items:center;}
+  #hud{display:flex;justify-content:center;gap:clamp(10px,4vw,48px);width:100%;
+       font-size:clamp(14px,2.4vw,26px);font-weight:bold;letter-spacing:2px;padding:3px 0;}
+  #stage{position:relative;line-height:0;}
+  canvas{border:4px solid #7a5c1e;background:#c8a951;display:block;
+         width:auto;height:auto;max-width:calc(100vw - 16px);max-height:calc(100dvh - 66px);}
+  #bar{display:flex;gap:8px;padding:4px;align-items:center;}
+  #bar button{padding:5px 12px;font-size:11px;}
+  #modeTag{font-size:10px;color:#8a7440;letter-spacing:1px;}
+
+  #touch{position:absolute;inset:0;pointer-events:none;}
+  .pad{position:absolute;display:flex;align-items:center;gap:clamp(6px,1.4vw,14px);
+       pointer-events:auto;opacity:.62;--bs:clamp(34px,7vw,54px);}
+  .pad.right{flex-direction:row-reverse;}
+  .pad.flip{transform:rotate(180deg);}
+  .dpad{display:grid;grid-template-columns:repeat(3,var(--bs));grid-template-rows:repeat(3,var(--bs));}
+  .tb{background:#2b2210;border:3px solid var(--pc);color:var(--pc);
+      font-size:calc(var(--bs)*0.45);line-height:1;display:flex;align-items:center;justify-content:center;
+      border-radius:8px;font-weight:bold;padding:0;}
+  .tb:active,.tb.on{background:var(--pc);color:#2b2210;transform:none;}
+  .fw{grid-area:1/2;}.lf{grid-area:2/1;}.rt{grid-area:2/3;}.rv{grid-area:3/2;}
+  .fire{width:calc(var(--bs)*1.5);height:calc(var(--bs)*1.5);border-radius:50%;font-size:calc(var(--bs)*0.4);}
+  .c0{top:6px;left:6px;}.c1{bottom:6px;right:6px;}.c2{top:6px;right:6px;}.c3{bottom:6px;left:6px;}
+</style>
+</head>
+<body>
+
+<div id="menu" class="screen">
+  <h1>COMBATE DE TANQUES</h1>
+  <div class="sub">★ HOMENAJE AL COMBAT DE ATARI (1977) ★</div>
+
+  <div class="lbl">JUGADORES</div>
+  <div class="row" id="rowP"></div>
+
+  <div class="lbl">CAMPO DE BATALLA</div>
+  <div class="row" id="rowM"></div>
+
+  <div class="lbl">MISILES</div>
+  <div class="row" id="rowS"></div>
+
+  <div class="lbl">TANQUES</div>
+  <div class="row" id="rowV"></div>
+
+  <div class="lbl">CONTROLES EN PANTALLA</div>
+  <div class="row" id="rowT"></div>
+
+  <div id="pads"></div>
+
+  <table class="ctrl">
+    <tr><th></th><th>AVANZAR</th><th>RETRO</th><th>GIRAR</th><th>FUEGO</th></tr>
+    <tr class="p0"><td><b>J1</b></td><td>W</td><td>S</td><td>A / D</td><td>Q</td></tr>
+    <tr class="p1"><td><b>J2</b></td><td>↑</td><td>↓</td><td>← / →</td><td>ESPACIO</td></tr>
+    <tr class="p2"><td><b>J3</b></td><td>T</td><td>G</td><td>F / H</td><td>Y</td></tr>
+    <tr class="p3"><td><b>J4</b></td><td>I</td><td>K</td><td>J / L</td><td>O</td></tr>
+  </table>
+
+  <div class="row">
+    <button class="big" onclick="startGame()">▶ JUGAR</button>
+    <button id="bSnd" onclick="toggleSound()">🔊 SÍ</button>
+    <button onclick="toggleFS()">⛶ PANTALLA COMPLETA</button>
+  </div>
+  <div class="hint">
+    Gana el primero que llega a 10 impactos · Un disparo a la vez, como el original.<br>
+    Teclado, joystick y pantalla táctil funcionan los tres a la vez para cada jugador.
+  </div>
+</div>
+
+<div id="wrap">
+  <div id="hud"></div>
+  <div id="stage"><canvas id="cv" width="860" height="560"></canvas><div id="touch"></div></div>
+  <div id="bar">
+    <button onclick="togglePause()">⏸</button>
+    <button onclick="toMenu()">MENÚ</button>
+    <button onclick="toggleFS()">⛶</button>
+    <span id="modeTag"></span>
+  </div>
+</div>
+
+<div id="gameover" class="screen">
+  <h1 id="goTitle">GANADOR</h1>
+  <div class="row">
+    <button class="big" onclick="startGame()">↻ REVANCHA</button>
+    <button class="big" onclick="toMenu()">MENÚ</button>
+  </div>
+</div>
+
+<script>
+'use strict';
+const cv=document.getElementById('cv'), ctx=cv.getContext('2d');
+const W=cv.width, H=cv.height, CX=W/2, CY=H/2;
+const TARGET=10, DIRS=16, STEP=Math.PI*2/DIRS;
+
+/* opciones */
+let numPlayers=3;
+let mapSel=1;        // 0 abierto · 1 simple · 2 complejo · 3 fortines · 4 aleatorio
+let shotSel=0;       // 0 directo · 1 rebote · 2 billar
+let invisible=false;
+let touchMode=0, soundOn=true;
+
+let running=false, paused=false;
+let tanks=[], bullets=[], walls=[], spawnPool=[], keys={}, lastT=0, curMap=1;
+let padMap=[null,null,null,null];
+
+/* ================= SONIDO ================= */
+let AC=null;
+function audio(){try{if(!AC)AC=new(window.AudioContext||window.webkitAudioContext)();if(AC.state==='suspended')AC.resume();return AC;}catch(e){return null;}}
+function toggleSound(){soundOn=!soundOn;document.getElementById('bSnd').textContent=soundOn?'🔊 SÍ':'🔇 NO';}
+function tone(type,f0,f1,dur,vol){
+  if(!soundOn)return; const a=audio(); if(!a)return; const t=a.currentTime;
+  const o=a.createOscillator(),g=a.createGain(); o.type=type;
+  o.frequency.setValueAtTime(f0,t);
+  if(f1!==f0) o.frequency.exponentialRampToValueAtTime(f1,t+dur);
+  g.gain.setValueAtTime(vol,t); g.gain.exponentialRampToValueAtTime(.001,t+dur);
+  o.connect(g).connect(a.destination); o.start(t); o.stop(t+dur+.02);
+}
+const sfxFire  =()=>tone('square',880,160,.13,.12);
+const sfxEngine=()=>tone('sawtooth',55,55,.08,.03);
+const sfxBounce=()=>tone('square',1400,900,.05,.07);
+function sfxHit(){
+  if(!soundOn)return; const a=audio(); if(!a)return; const t=a.currentTime;
+  const len=a.sampleRate*.35,buf=a.createBuffer(1,len,a.sampleRate),d=buf.getChannelData(0);
+  for(let i=0;i<len;i++)d[i]=(Math.random()*2-1)*(1-i/len);
+  const s=a.createBufferSource(); s.buffer=buf;
+  const g=a.createGain(); g.gain.setValueAtTime(.25,t); g.gain.exponentialRampToValueAtTime(.001,t+.35);
+  const f=a.createBiquadFilter(); f.type='lowpass'; f.frequency.value=900;
+  s.connect(f).connect(g).connect(a.destination); s.start(t);
+}
+function sfxWin(){if(!soundOn)return;const a=audio();if(!a)return;let t=a.currentTime;
+  [523,659,784,1047].forEach(f=>{const o=a.createOscillator(),g=a.createGain();
+    o.type='square';o.frequency.value=f;
+    g.gain.setValueAtTime(.1,t);g.gain.exponentialRampToValueAtTime(.001,t+.18);
+    o.connect(g).connect(a.destination);o.start(t);o.stop(t+.2);t+=.15;});}
+
+/* ================= JUGADORES ================= */
+const PLAYERS=[
+ {color:'#e05d3a',dark:'#8a3218',name:'J1',keys:{fwd:'KeyW',rev:'KeyS',left:'KeyA',right:'KeyD',fire:'KeyQ'}},
+ {color:'#5a8fe0',dark:'#2a4f8a',name:'J2',keys:{fwd:'ArrowUp',rev:'ArrowDown',left:'ArrowLeft',right:'ArrowRight',fire:'Space'}},
+ {color:'#4a9c30',dark:'#2a5c18',name:'J3',keys:{fwd:'KeyT',rev:'KeyG',left:'KeyF',right:'KeyH',fire:'KeyY'}},
+ {color:'#c8a010',dark:'#7a6008',name:'J4',keys:{fwd:'KeyI',rev:'KeyK',left:'KeyJ',right:'KeyL',fire:'KeyO'}},
+];
+
+/* ================= CAMPOS DE BATALLA ================= */
+const MAPS=['CAMPO ABIERTO','LABERINTO SIMPLE','LABERINTO COMPLEJO','FORTINES'];
+function border(){const t=16;return[{x:0,y:0,w:W,h:t},{x:0,y:H-t,w:W,h:t},{x:0,y:0,w:t,h:H},{x:W-t,y:0,w:t,h:H}];}
+function sym(L,x,y,w,h){                       // agrega el rect y sus 3 espejos
+  L.push({x,y,w,h});
+  L.push({x:W-x-w,y,w,h});
+  L.push({x,y:H-y-h,w,h});
+  L.push({x:W-x-w,y:H-y-h,w,h});
+}
+function buildMap(n){
+  const L=border();
+  if(n===0){                                   // CAMPO ABIERTO — sólo dos topes
+    sym(L,CX-40,110,80,16);
+  } else if(n===1){                            // LABERINTO SIMPLE (easy maze)
+    L.push({x:CX-70,y:CY-14,w:140,h:28});
+    sym(L,232,122,16,120);
+    sym(L,232,122,96,16);
+    L.push({x:104,y:CY-8,w:74,h:16});
+    L.push({x:W-178,y:CY-8,w:74,h:16});
+  } else if(n===2){                            // LABERINTO COMPLEJO
+    L.push({x:CX-92,y:CY-8,w:184,h:16});
+    L.push({x:CX-8,y:CY-74,w:16,h:148});
+    sym(L,118,86,16,132);
+    sym(L,118,86,112,16);
+    sym(L,318,74,16,104);
+    sym(L,172,246,120,16);
+    sym(L,392,196,16,88);
+  } else {                                     // FORTINES
+    L.push({x:CX-56,y:CY-56,w:112,h:16});
+    L.push({x:CX-56,y:CY+40,w:112,h:16});
+    L.push({x:CX-56,y:CY-56,w:16,h:112});
+    L.push({x:CX+40,y:CY-56,w:16,h:112});
+    sym(L,96,84,140,16);
+    sym(L,96,84,16,96);
+    sym(L,300,236,16,88);
+  }
+  return L;
+}
+function buildSpawnPool(){
+  const xs=[76,224,372,W-372,W-224,W-76], ys=[76,CY,H-76];
+  const pool=[];
+  for(const x of xs)for(const y of ys){
+    const p={x:Math.round(x),y};
+    if(!hitsWall(p.x,p.y,26))pool.push(p);
+  }
+  return pool.length>=4?pool:[{x:80,y:80},{x:W-80,y:80},{x:80,y:H-80},{x:W-80,y:H-80}];
+}
+
+/* ================= COLISIONES ================= */
+function rectCircle(rx,ry,rw,rh,cx,cy,cr){
+  const nx=Math.max(rx,Math.min(cx,rx+rw)),ny=Math.max(ry,Math.min(cy,ry+rh));
+  const dx=cx-nx,dy=cy-ny;return dx*dx+dy*dy<cr*cr;}
+function hitsWall(x,y,r){for(const w of walls)if(rectCircle(w.x,w.y,w.w,w.h,x,y,r))return true;return false;}
+function hitsTank(x,y,r,self){for(const t of tanks){if(t===self||t.dead>0)continue;
+  const dx=t.x-x,dy=t.y-y;if(dx*dx+dy*dy<(r+t.r)*(r+t.r))return true;}return false;}
+
+/* ================= APARICIÓN ================= */
+function pickSpawn(self){
+  const others=tanks.filter(t=>t!==self&&t.dead<=0);
+  const scored=spawnPool.map(p=>{
+    let d=1e9;
+    for(const o of others) d=Math.min(d,Math.hypot(p.x-o.x,p.y-o.y));
+    return{p,d};
+  }).sort((a,b)=>b.d-a.d);
+  // entre los más lejanos (>=75% de la mejor distancia) elijo uno al azar
+  const best=scored[0].d;
+  const good=scored.filter(s=>s.d>=best*.75);
+  return good[Math.floor(Math.random()*good.length)].p;
+}
+function placeTank(t){
+  const p=pickSpawn(t);
+  t.x=p.x; t.y=p.y; t.dead=0; t.vis=0;
+  // mira hacia el centro del campo
+  t.dir=((Math.round(Math.atan2(CY-t.y,CX-t.x)/STEP)%DIRS)+DIRS)%DIRS;
+}
+function makeTank(i){
+  const t={i,x:0,y:0,dir:0,score:0,r:16,bullet:null,rotCd:0,engineCd:0,dead:0,vis:0,
+    color:PLAYERS[i].color,dark:PLAYERS[i].dark,name:PLAYERS[i].name,keys:PLAYERS[i].keys};
+  return t;
+}
+const angle=t=>t.dir*STEP;
+
+/* ================= TECLADO ================= */
+addEventListener('keydown',e=>{
+  if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space'].includes(e.code))e.preventDefault();
+  keys[e.code]=true;
+  if(e.code==='KeyP'&&running)togglePause();
+  if(e.code==='Escape'&&running)toMenu();
+});
+addEventListener('keyup',e=>{keys[e.code]=false;});
+
+/* ================= JOYSTICKS ================= */
+const DZ=0.4;
+function getPads(){try{return navigator.getGamepads?navigator.getGamepads():[];}catch(e){return[];}}
+function refreshPads(){
+  const gps=getPads(),found=[]; padMap=[null,null,null,null]; let slot=0;
+  for(let i=0;i<gps.length&&slot<4;i++)
+    if(gps[i]&&gps[i].connected){padMap[slot]=i;found.push('J'+(slot+1)+' → '+gps[i].id.slice(0,20));slot++;}
+  document.getElementById('pads').textContent=found.length
+    ?'JOYSTICKS: '+found.join(' · ')
+    :'JOYSTICKS: ninguno — apretá un botón del joystick';
+}
+addEventListener('gamepadconnected',refreshPads);
+addEventListener('gamepaddisconnected',refreshPads);
+function padInput(pi){
+  const idx=padMap[pi]; if(idx===null)return null;
+  const gp=getPads()[idx]; if(!gp||!gp.connected)return null;
+  const ax=gp.axes[0]||0,ay=gp.axes[1]||0,b=gp.buttons,B=n=>b[n]&&b[n].pressed;
+  return{fwd:ay<-DZ||B(12),rev:ay>DZ||B(13),left:ax<-DZ||B(14),right:ax>DZ||B(15),
+         fire:B(0)||B(1)||B(2)||B(3)||B(5)||B(7)};
+}
+function rumble(pi){
+  const idx=padMap[pi]; if(idx===null)return;
+  const gp=getPads()[idx];
+  try{gp&&gp.vibrationActuator&&gp.vibrationActuator.playEffect('dual-rumble',
+     {duration:220,strongMagnitude:.8,weakMagnitude:.5});}catch(e){}
+}
+
+/* ================= TÁCTIL ================= */
+const touchState=[{},{},{},{}];
+const CORNER=['c0','c1','c2','c3'],SIDE=['','right','right',''];
+function buildTouch(){
+  const host=document.getElementById('touch'); host.innerHTML='';
+  touchState.forEach(s=>{for(const k in s)delete s[k];});
+  if(!touchMode)return;
+  for(let i=0;i<numPlayers;i++){
+    const flip=touchMode===2&&(i===0||i===2);
+    const d=document.createElement('div');
+    d.className='pad '+CORNER[i]+' '+SIDE[i]+(flip?' flip':'');
+    d.style.setProperty('--pc',PLAYERS[i].color);
+    d.innerHTML='<div class="dpad">'+
+      '<button class="tb fw" data-a="fwd">▲</button><button class="tb lf" data-a="left">◀</button>'+
+      '<button class="tb rt" data-a="right">▶</button><button class="tb rv" data-a="rev">▼</button></div>'+
+      '<button class="tb fire" data-a="fire">'+PLAYERS[i].name+'</button>';
+    d.querySelectorAll('button').forEach(btn=>{
+      const act=btn.dataset.a;
+      btn.addEventListener('pointerdown',e=>{e.preventDefault();btn.setPointerCapture(e.pointerId);
+        touchState[i][act]=true;btn.classList.add('on');});
+      const up=()=>{touchState[i][act]=false;btn.classList.remove('on');};
+      btn.addEventListener('pointerup',up);
+      btn.addEventListener('pointercancel',up);
+      btn.addEventListener('contextmenu',e=>e.preventDefault());
+    });
+    host.appendChild(d);
+  }
+}
+function readInput(t){
+  const k=t.keys;
+  const inp={fwd:!!keys[k.fwd],rev:!!keys[k.rev],left:!!keys[k.left],right:!!keys[k.right],fire:!!keys[k.fire]};
+  const g=padInput(t.i); if(g)for(const a in inp)inp[a]=inp[a]||g[a];
+  const s=touchState[t.i]; for(const a in inp)inp[a]=inp[a]||!!s[a];
+  return inp;
+}
+
+/* ================= LÓGICA ================= */
+const BOUNCE=()=>shotSel>0, BILLIARD=()=>shotSel===2;
+function update(dt){
+  for(const t of tanks){
+    if(t.vis>0)t.vis-=dt;
+    if(t.dead>0){t.dead-=dt;t.dir=(t.dir+1)%DIRS;if(t.dead<=0)placeTank(t);continue;}
+    const inp=readInput(t);
+    t.rotCd-=dt;
+    if(t.rotCd<=0){
+      if(inp.left){t.dir=(t.dir+DIRS-1)%DIRS;t.rotCd=.11;}
+      else if(inp.right){t.dir=(t.dir+1)%DIRS;t.rotCd=.11;}
+    }
+    let v=0; if(inp.fwd)v=120; else if(inp.rev)v=-60;
+    if(v){
+      t.engineCd-=dt; if(t.engineCd<=0){sfxEngine();t.engineCd=.1;}
+      const a=angle(t),nx=t.x+Math.cos(a)*v*dt,ny=t.y+Math.sin(a)*v*dt;
+      let bumped=false;
+      if(!hitsWall(nx,t.y,t.r)&&!hitsTank(nx,t.y,t.r,t))t.x=nx; else bumped=true;
+      if(!hitsWall(t.x,ny,t.r)&&!hitsTank(t.x,ny,t.r,t))t.y=ny; else bumped=true;
+      if(bumped)t.vis=.35;                      // choque contra pared → se hace visible
+    }
+    if(inp.fire&&!t.bullet){
+      const a=angle(t);
+      t.bullet={x:t.x+Math.cos(a)*22,y:t.y+Math.sin(a)*22,
+                vx:Math.cos(a)*320,vy:Math.sin(a)*320,
+                life:BOUNCE()?3.4:2.2,bounces:0,owner:t};
+      bullets.push(t.bullet); sfxFire();
+      t.vis=.35;                                // disparo → se hace visible
+    }
+  }
+
+  for(let i=bullets.length-1;i>=0;i--){
+    const b=bullets[i];
+    b.life-=dt;
+    let kill=b.life<=0;
+    if(!kill)kill=stepBullet(b,dt);
+    if(!kill)for(const t of tanks){
+      if(t===b.owner||t.dead>0)continue;        // el tiro propio nunca resta
+      if(BILLIARD()&&b.bounces===0)continue;    // billar: hay que rebotar antes
+      const dx=t.x-b.x,dy=t.y-b.y;
+      if(dx*dx+dy*dy<(t.r+4)*(t.r+4)){
+        t.dead=1.6; t.vis=1.6; b.owner.score++;
+        sfxHit(); rumble(t.i); rumble(b.owner.i); updateHUD();
+        kill=true;
+        if(b.owner.score>=TARGET)endGame(b.owner);
+        break;
+      }
+    }
+    if(kill){b.owner.bullet=null;bullets.splice(i,1);}
+  }
+}
+/* devuelve true si el proyectil muere */
+function stepBullet(b,dt){
+  const SUB=4,h=dt/SUB;
+  for(let s=0;s<SUB;s++){
+    let nx=b.x+b.vx*h, ny=b.y+b.vy*h;
+    const cx=hitsWall(nx,b.y,3), cy=hitsWall(b.x,ny,3);
+    if(cx||cy){
+      if(!BOUNCE())return true;                 // modo directo: muere en la pared
+      if(cx){b.vx=-b.vx;nx=b.x;}
+      if(cy){b.vy=-b.vy;ny=b.y;}
+      b.bounces++; sfxBounce();
+      if(b.bounces>8)return true;
+    } else if(hitsWall(nx,ny,3)){               // esquina en diagonal
+      if(!BOUNCE())return true;
+      b.vx=-b.vx; b.vy=-b.vy; nx=b.x; ny=b.y;
+      b.bounces++; sfxBounce();
+      if(b.bounces>8)return true;
+    }
+    b.x=nx; b.y=ny;
+  }
+  return false;
+}
+
+/* ================= DIBUJO ================= */
+function drawTank(t){
+  const hidden = invisible && t.vis<=0 && t.dead<=0;
+  if(hidden) return;
+  ctx.save(); ctx.translate(t.x,t.y); ctx.rotate(angle(t));
+  const c=(t.dead>0&&Math.floor(t.dead*10)%2)?'#fff':t.color;
+  ctx.globalAlpha = (invisible && t.vis>0 && t.dead<=0) ? Math.min(1,t.vis*3) : 1;
+  ctx.fillStyle=t.dark; ctx.fillRect(-14,-14,28,7); ctx.fillRect(-14,7,28,7);
+  ctx.fillStyle=c;      ctx.fillRect(-12,-8,24,16);
+  ctx.fillStyle=t.dark; ctx.fillRect(-6,-5,12,10);
+  ctx.fillStyle=c;      ctx.fillRect(4,-2,18,4);
+  ctx.restore();
+}
+function draw(){
+  ctx.globalAlpha=1;
+  ctx.fillStyle='#c8a951'; ctx.fillRect(0,0,W,H);
+  ctx.fillStyle='#8a5a20'; for(const w of walls)ctx.fillRect(w.x,w.y,w.w,w.h);
+  for(const t of tanks)drawTank(t);
+  ctx.globalAlpha=1;
+  for(const b of bullets){
+    ctx.fillStyle=BILLIARD()&&b.bounces===0?'#7a6a40':'#2b2210';   // gris = todavía no puntúa
+    ctx.fillRect(b.x-3,b.y-3,6,6);
+  }
+  if(paused){
+    ctx.fillStyle='rgba(0,0,0,.55)'; ctx.fillRect(0,0,W,H);
+    ctx.fillStyle='#e8d590'; ctx.font='bold 44px Courier New'; ctx.textAlign='center';
+    ctx.fillText('PAUSA',CX,CY);
+  }
+}
+function updateHUD(){
+  document.getElementById('hud').innerHTML=
+    tanks.map(t=>`<span style="color:${t.color}">${t.name}&nbsp;${t.score}</span>`).join('');
+}
+
+/* ================= CICLO ================= */
+function loop(ts){
+  if(!running)return;
+  const dt=Math.min((ts-lastT)/1000,.05); lastT=ts;
+  if(!paused)update(dt);
+  draw();
+  requestAnimationFrame(loop);
+}
+
+/* ================= MENÚ ================= */
+function mkRow(id,opts,get,set){
+  const row=document.getElementById(id); row.innerHTML='';
+  opts.forEach((label,i)=>{
+    const b=document.createElement('button');
+    b.textContent=label;
+    b.onclick=()=>{set(i);paint();};
+    row.appendChild(b);
+  });
+  row._get=get;
+}
+function paint(){
+  const map={rowP:()=>numPlayers-2,rowM:()=>mapSel,rowS:()=>shotSel,
+             rowV:()=>invisible?1:0,rowT:()=>touchMode};
+  for(const id in map){
+    const row=document.getElementById(id), sel=map[id]();
+    [...row.children].forEach((b,i)=>b.classList.toggle('sel',i===sel));
+  }
+}
+mkRow('rowP',['2','3','4'],0,i=>numPlayers=i+2);
+mkRow('rowM',[...MAPS,'ALEATORIO'],0,i=>mapSel=i);
+mkRow('rowS',['DIRECTO','REBOTE','BILLAR'],0,i=>shotSel=i);
+mkRow('rowV',['VISIBLES','INVISIBLES'],0,i=>invisible=(i===1));
+mkRow('rowT',['SIN TÁCTIL','LADO A LADO','ENFRENTADOS'],0,i=>touchMode=i);
+
+function togglePause(){if(running)paused=!paused;}
+function toggleFS(){
+  if(!document.fullscreenElement)document.documentElement.requestFullscreen&&document.documentElement.requestFullscreen().catch(()=>{});
+  else document.exitFullscreen&&document.exitFullscreen();
+}
+function startGame(){
+  audio();
+  curMap = mapSel===4 ? Math.floor(Math.random()*MAPS.length) : mapSel;
+  walls=buildMap(curMap);
+  spawnPool=buildSpawnPool();
+  buildTouch();
+  tanks=[]; bullets=[]; keys={};
+  for(let i=0;i<numPlayers;i++){const t=makeTank(i);tanks.push(t);placeTank(t);}
+  updateHUD();
+  document.getElementById('modeTag').textContent=
+    MAPS[curMap]+' · '+['DIRECTO','REBOTE','BILLAR'][shotSel]+(invisible?' · INVISIBLES':'');
+  document.getElementById('menu').style.display='none';
+  document.getElementById('gameover').style.display='none';
+  document.getElementById('wrap').style.display='flex';
+  running=true; paused=false; lastT=performance.now();
+  requestAnimationFrame(loop);
+}
+function endGame(w){
+  running=false; sfxWin();
+  const el=document.getElementById('goTitle');
+  el.textContent='★ GANA '+w.name+' ★'; el.style.color=w.color;
+  document.getElementById('wrap').style.display='none';
+  document.getElementById('gameover').style.display='block';
+}
+function toMenu(){
+  running=false;
+  document.getElementById('wrap').style.display='none';
+  document.getElementById('gameover').style.display='none';
+  document.getElementById('menu').style.display='block';
+  refreshPads();
+}
+
+if(matchMedia('(pointer:coarse)').matches)touchMode=1;
+paint(); refreshPads();
+setInterval(()=>{if(!running)refreshPads();},1500);
+</script>
+</body>
+</html>
