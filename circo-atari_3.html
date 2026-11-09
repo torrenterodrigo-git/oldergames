@@ -1,0 +1,547 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>CIRCO — homenaje a Circus Atari (1980)</title>
+<style>
+  :root{
+    --negro:#0a0a12;
+    --carpa-rojo:#e03a3a;
+    --carpa-crema:#f5e9c8;
+    --globo-rojo:#ff4b4b;
+    --globo-azul:#4b9bff;
+    --globo-blanco:#f0ead0;
+    --fosforo:#ffd23f;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%;background:var(--negro);overflow:hidden;
+    font-family:"Courier New",Courier,monospace;color:var(--carpa-crema)}
+  #stage{position:fixed;inset:0;display:flex;align-items:center;justify-content:center}
+  #wrap{position:relative}
+  canvas{display:block;image-rendering:pixelated;background:#000;
+    box-shadow:0 0 60px rgba(255,210,63,.12), inset 0 0 120px rgba(0,0,0,.6);
+    border:4px solid #1c1c2e;touch-action:none;cursor:none}
+  /* scanlines CRT */
+  #crt{position:absolute;inset:4px;pointer-events:none;
+    background:repeating-linear-gradient(0deg, rgba(0,0,0,.22) 0 1px, transparent 1px 3px);
+    mix-blend-mode:multiply}
+  /* menú */
+  #menu{position:absolute;inset:4px;display:flex;flex-direction:column;
+    align-items:center;justify-content:center;gap:14px;
+    background:radial-gradient(ellipse at 50% 30%, #1a1030 0%, #0a0a12 70%)}
+  #menu.oculto,#turno.oculto{display:none}
+  .carpa{font-size:clamp(34px,7vw,64px);font-weight:bold;letter-spacing:.18em;
+    color:var(--fosforo);text-shadow:0 0 18px rgba(255,210,63,.55), 3px 3px 0 var(--carpa-rojo);
+    animation:parpadeo 2.4s steps(2) infinite}
+  @keyframes parpadeo{0%,92%{opacity:1}96%{opacity:.55}100%{opacity:1}}
+  .sub{font-size:clamp(10px,1.8vw,14px);letter-spacing:.3em;color:#8f8fb0;text-transform:uppercase}
+  .franjas{width:min(70%,420px);height:10px;margin:6px 0 14px;
+    background:repeating-linear-gradient(90deg,var(--carpa-rojo) 0 24px,var(--carpa-crema) 24px 48px)}
+  button.opcion{font-family:inherit;font-size:clamp(14px,2.4vw,20px);font-weight:bold;
+    letter-spacing:.15em;padding:14px 34px;min-width:min(70vw,320px);
+    background:transparent;color:var(--carpa-crema);border:3px solid var(--carpa-crema);
+    cursor:pointer;text-transform:uppercase}
+  button.opcion:hover,button.opcion:focus-visible{background:var(--carpa-rojo);
+    border-color:var(--carpa-rojo);color:#fff;outline:none;
+    box-shadow:0 0 22px rgba(224,58,58,.6)}
+  .ayuda{font-size:clamp(9px,1.6vw,12px);color:#6d6d8c;text-align:center;line-height:1.7;
+    max-width:80%;letter-spacing:.06em}
+  /* cartel de turno / fin */
+  #turno{position:absolute;inset:4px;display:flex;flex-direction:column;gap:10px;
+    align-items:center;justify-content:center;background:rgba(5,5,12,.86)}
+  #turnoTexto{font-size:clamp(20px,4vw,36px);font-weight:bold;letter-spacing:.2em;
+    color:var(--fosforo);text-shadow:0 0 14px rgba(255,210,63,.5);text-align:center}
+  #turnoSub{font-size:clamp(11px,2vw,15px);color:#9a9ab8;letter-spacing:.15em;text-align:center}
+  #mute{position:absolute;top:12px;right:12px;z-index:5;font-family:inherit;
+    font-size:16px;width:42px;height:42px;background:rgba(10,10,20,.7);
+    color:var(--carpa-crema);border:2px solid #33334d;cursor:pointer}
+  #mute:hover{border-color:var(--fosforo)}
+</style>
+</head>
+<body>
+<div id="stage">
+  <div id="wrap">
+    <canvas id="c" width="800" height="600"></canvas>
+    <div id="crt"></div>
+    <button id="mute" title="Sonido">🔊</button>
+    <div id="menu">
+      <div class="carpa">¡CIRCO!</div>
+      <div class="sub">homenaje al Circus Atari · 1980</div>
+      <div class="franjas"></div>
+      <button class="opcion" id="b1">1 jugador</button>
+      <button class="opcion" id="b2">2 jugadores</button>
+      <div class="ayuda">
+        Mové el subibaja con el mouse o el dedo.<br>
+        Reventá los globos. Fila roja completa = vida extra.<br>
+        Palanca equilibrada: el mejor tiro sale cuando caés a la misma<br>
+        distancia del fulcro que el payaso sentado. Puntas = más altura.
+      </div>
+    </div>
+    <div id="turno" class="oculto">
+      <div id="turnoTexto"></div>
+      <div id="turnoSub"></div>
+    </div>
+  </div>
+</div>
+<script>
+"use strict";
+/* ============ CONSTANTES ============ */
+const W=800, H=600;
+const cv=document.getElementById("c"), ctx=cv.getContext("2d");
+const GRAV=0.34, R_PAYASO=13;
+const TABLA_W=132, TABLA_H=10, TABLA_Y=540, FULCRO_H=26;
+const FILAS=[
+  {y:74,  color:"#ff4b4b", borde:"#a31f1f", pts:50, vel: 1.35}, // roja: vida extra
+  {y:112, color:"#4b9bff", borde:"#1f4fa3", pts:20, vel:-1.05},
+  {y:150, color:"#f0ead0", borde:"#8f8a6a", pts:10, vel: 0.80},
+];
+const N_GLOBOS=16, R_GLOBO=13, VIDAS_INI=3;
+
+/* ============ AUDIO (Web Audio API) ============ */
+let actx=null, muteado=false, masterGain=null;
+function audioOn(){
+  if(actx) return;
+  try{
+    actx=new (window.AudioContext||window.webkitAudioContext)();
+    masterGain=actx.createGain();
+    masterGain.gain.value=0.35;
+    masterGain.connect(actx.destination);
+  }catch(e){ actx=null; }
+}
+function tono(freq,dur,tipo,vol,freqFin){
+  if(!actx||muteado) return;
+  const o=actx.createOscillator(), g=actx.createGain(), t=actx.currentTime;
+  o.type=tipo; o.frequency.setValueAtTime(freq,t);
+  if(freqFin) o.frequency.exponentialRampToValueAtTime(Math.max(30,freqFin),t+dur);
+  g.gain.setValueAtTime(vol,t);
+  g.gain.exponentialRampToValueAtTime(0.001,t+dur);
+  o.connect(g); g.connect(masterGain);
+  o.start(t); o.stop(t+dur+0.02);
+}
+const sfx={
+  rebote(fuerza){ tono(120+fuerza*18, .14, "square", .5, 320+fuerza*30); },
+  pared(){ tono(200,.06,"square",.3,140); },
+  pop(fila){ tono([880,660,520][fila], .09, "triangle", .55, [1400,1000,800][fila]);
+             tono([880,660,520][fila]*1.5,.05,"square",.2); },
+  splat(){ tono(300,.5,"sawtooth",.6,40); tono(180,.4,"square",.35,35); },
+  filaCompleta(){ [523,659,784,1047].forEach((f,i)=>setTimeout(()=>tono(f,.14,"square",.45),i*90)); },
+  vidaExtra(){ [784,988,1175,1568,1976].forEach((f,i)=>setTimeout(()=>tono(f,.16,"triangle",.5),i*100)); },
+  inicio(){ [392,523,659].forEach((f,i)=>setTimeout(()=>tono(f,.12,"square",.35),i*110)); },
+};
+document.getElementById("mute").addEventListener("click",e=>{
+  muteado=!muteado;
+  e.currentTarget.textContent = muteado ? "🔇" : "🔊";
+});
+
+/* ============ ESTADO ============ */
+let modo=null;               // "menu" | "listo" | "jugando" | "cambio" | "fin"
+let numJugadores=1;
+let jugadores=[];            // {puntos, vidas}
+let turno=0;                 // índice del jugador activo
+let nivel=1;
+let globos=[];               // por fila: array de {x, viva}
+let offsets=[0,0,0];         // desplazamiento de cada fila
+let tabla={x:W/2, vx:0, sentadoDx:-TABLA_W*0.40}; // sentadoDx: dónde está sentado el payaso (offset del fulcro)
+let vuelo=null;              // payaso en el aire {x,y,vx,vy}
+let particulas=[];
+let racha=0;                 // globos seguidos sin caer (bonus visual)
+let msgFlash=null;           // {texto,color,t}
+let lastT=0, mouseX=W/2;
+
+function nuevaFilaGlobos(){
+  const sep=W/N_GLOBOS;
+  return Array.from({length:N_GLOBOS},(_,i)=>({x:i*sep+sep/2, viva:true}));
+}
+function resetGlobos(){
+  globos=FILAS.map(()=>nuevaFilaGlobos());
+  offsets=[0,0,0];
+}
+function nuevaPartida(nj){
+  numJugadores=nj;
+  jugadores=Array.from({length:nj},()=>({puntos:0, vidas:VIDAS_INI}));
+  turno=0; nivel=1; racha=0;
+  resetGlobos();
+  prepararServe();
+  sfx.inicio();
+  mostrarTurno(`JUGADOR ${turno+1}`, "tocá o hacé clic para lanzar", ()=>{ modo="listo"; });
+}
+function prepararServe(){
+  tabla.sentadoDx = (Math.random()<.5 ? -1 : 1)*TABLA_W*0.40;
+  const sx = 140 + Math.random()*(W-280);
+  vuelo={x:sx, y:170, vx:0, vy:0, esperando:true};
+}
+function mostrarTurno(titulo, sub, luego){
+  modo="cambio";
+  const el=document.getElementById("turno");
+  document.getElementById("turnoTexto").textContent=titulo;
+  document.getElementById("turnoSub").textContent=sub;
+  el.classList.remove("oculto");
+  const cerrar=()=>{
+    el.classList.add("oculto");
+    el.removeEventListener("pointerdown",cerrar);
+    luego&&luego();
+  };
+  el.addEventListener("pointerdown",cerrar);
+}
+
+/* ============ ENTRADA ============ */
+function posX(e){
+  const r=cv.getBoundingClientRect();
+  const cx=(e.touches?e.touches[0].clientX:e.clientX);
+  return (cx-r.left)*(W/r.width);
+}
+cv.addEventListener("pointermove",e=>{ mouseX=posX(e); });
+cv.addEventListener("pointerdown",e=>{
+  audioOn();
+  mouseX=posX(e);
+  if(modo==="listo" && vuelo && vuelo.esperando){
+    vuelo.esperando=false;
+    modo="jugando";
+  }
+});
+cv.addEventListener("touchmove",e=>{ e.preventDefault(); mouseX=posX(e); },{passive:false});
+
+document.getElementById("b1").addEventListener("click",()=>{ audioOn(); ocultarMenu(); nuevaPartida(1); });
+document.getElementById("b2").addEventListener("click",()=>{ audioOn(); ocultarMenu(); nuevaPartida(2); });
+function ocultarMenu(){ document.getElementById("menu").classList.add("oculto"); }
+function verMenu(){ document.getElementById("menu").classList.remove("oculto"); modo="menu"; }
+
+/* ============ LÓGICA ============ */
+function paso(dt){
+  // la tabla sigue al puntero (suavizado leve) y registramos su velocidad
+  const objetivo=Math.max(TABLA_W/2, Math.min(W-TABLA_W/2, mouseX));
+  const prevX=tabla.x;
+  tabla.x += (objetivo-tabla.x)*Math.min(1, .55*dt);
+  tabla.vx = (tabla.x-prevX)/Math.max(dt,0.001);
+
+  // filas de globos a la deriva
+  const velNivel=1+ (nivel-1)*0.18;
+  for(let f=0; f<3; f++){
+    offsets[f]=(offsets[f]+FILAS[f].vel*velNivel*dt + W)%W;
+  }
+
+  // partículas
+  for(const p of particulas){ p.x+=p.vx*dt; p.y+=p.vy*dt; p.vy+=.12*dt; p.t-=dt; }
+  particulas=particulas.filter(p=>p.t>0);
+  if(msgFlash){ msgFlash.t-=dt; if(msgFlash.t<=0) msgFlash=null; }
+
+  if(!vuelo) return;
+  if(vuelo.esperando){
+    // flota esperando el lanzamiento
+    vuelo.y=170+Math.sin(performance.now()/300)*6;
+    return;
+  }
+  if(modo!=="jugando") return;
+
+  const yPrev=vuelo.y;
+  vuelo.vy+=GRAV*dt;
+  vuelo.x+=vuelo.vx*dt;
+  vuelo.y+=vuelo.vy*dt;
+
+  // paredes y techo
+  if(vuelo.x<R_PAYASO){ vuelo.x=R_PAYASO; vuelo.vx=Math.abs(vuelo.vx); sfx.pared(); }
+  if(vuelo.x>W-R_PAYASO){ vuelo.x=W-R_PAYASO; vuelo.vx=-Math.abs(vuelo.vx); sfx.pared(); }
+  if(vuelo.y<R_PAYASO+18){ vuelo.y=R_PAYASO+18; vuelo.vy=Math.abs(vuelo.vy); sfx.pared(); }
+
+  // choque con globos (solo subiendo o bajando cerca de las filas)
+  for(let f=0; f<3; f++){
+    const fila=FILAS[f];
+    if(Math.abs(vuelo.y-fila.y)>R_PAYASO+R_GLOBO) continue;
+    for(const g of globos[f]){
+      if(!g.viva) continue;
+      const gx=(g.x+offsets[f])%W;
+      const dx=vuelo.x-gx, dy=vuelo.y-fila.y;
+      if(dx*dx+dy*dy < (R_PAYASO+R_GLOBO-3)**2){
+        g.viva=false;
+        jugadores[turno].puntos+=fila.pts;
+        racha++;
+        sfx.pop(f);
+        explotar(gx,fila.y,fila.color);
+        if(globos[f].every(b=>!b.viva)) filaCompleta(f);
+      }
+    }
+  }
+
+  // aterrizaje en la tabla: detecta el cruce del plano entre frame y frame
+  const plano=TABLA_Y-R_PAYASO;
+  if(vuelo.vy>0 && yPrev<=plano+16 && vuelo.y>=plano-4){
+    // interpola x en el momento del cruce para no "atravesar" la tabla
+    const f=(plano-yPrev)/Math.max(0.001,(vuelo.y-yPrev));
+    const xCruce=vuelo.x-vuelo.vx*dt*(1-Math.max(0,Math.min(1,f)));
+    const dx=xCruce-tabla.x;
+    // solo vale aterrizar en la punta LIBRE (la levantada);
+    // caer del lado del payaso sentado = sigue de largo y splat
+    const ladoLibreOk = tabla.sentadoDx<0 ? dx>-8 : dx<8;
+    if(Math.abs(dx)<=TABLA_W/2 && ladoLibreOk){
+      vuelo.x=xCruce; vuelo.y=plano;
+      lanzar(dx);
+      return;
+    }
+  }
+  // se pasó de largo: splat
+  if(vuelo.y-R_PAYASO>H){
+    splat();
+  }
+}
+
+function lanzar(dx){
+  const caida=vuelo.vy;
+  const dMax=TABLA_W/2;
+  const dIn =Math.max(10, Math.min(dMax, Math.abs(dx)));               // dónde cayó el que viene de arriba
+  const dOut=Math.max(10, Math.min(dMax, Math.abs(tabla.sentadoDx)));  // dónde estaba sentado el que sale
+  // física de palanca doble:
+  //  - eficiencia máxima (=1) cuando ambos están a la MISMA distancia del fulcro
+  //  - palancas largas (ambos cerca de las puntas) dan más altura que palancas cortas
+  const eficiencia = 2*dIn*dOut/(dIn*dIn+dOut*dOut);
+  const amplitud   = (dIn+dOut)/(2*dMax);
+  const fuerza=Math.min(19, 6.8 + caida*0.72*eficiencia*(0.55+0.45*amplitud));
+
+  const saleX=Math.max(R_PAYASO, Math.min(W-R_PAYASO, tabla.x+tabla.sentadoDx));
+
+  // control horizontal: velocidad de la tabla al momento del impacto
+  let vx = tabla.vx*0.55;
+  vx = Math.max(-6.5, Math.min(6.5, vx));
+  if(Math.abs(vx)<0.8) vx = (tabla.sentadoDx<0?1:-1)*1.1;   // empujoncito hacia el centro
+
+  vuelo={x:saleX, y:TABLA_Y-R_PAYASO-2, vx, vy:-fuerza};
+  tabla.sentadoDx = Math.max(-dMax+6, Math.min(dMax-6, dx)); // queda sentado DONDE cayó
+  racha=0;
+  sfx.rebote(fuerza);
+}
+
+function filaCompleta(f){
+  const j=jugadores[turno];
+  if(f===0){
+    j.vidas++;
+    j.puntos+=200;
+    sfx.vidaExtra();
+    flash("¡FILA ROJA! +1 VIDA","#ff4b4b");
+  }else{
+    j.puntos+=100;
+    sfx.filaCompleta();
+    flash("¡FILA COMPLETA! +100", FILAS[f].color);
+  }
+  nivel++;
+  setTimeout(()=>{ globos[f]=nuevaFilaGlobos(); }, 900);
+}
+
+function splat(){
+  sfx.splat();
+  explotar(vuelo.x, H-14, "#f0ead0");
+  const j=jugadores[turno];
+  j.vidas--;
+  vuelo=null;
+  const quedan=jugadores.some(p=>p.vidas>0);
+  if(!quedan){ finDePartida(); return; }
+  // pasa el turno al siguiente con vidas (así alternaba el original)
+  if(numJugadores===2){
+    for(let i=1;i<=2;i++){
+      const cand=(turno+i)%2;
+      if(jugadores[cand].vidas>0){ turno=cand; break; }
+    }
+  }
+  prepararServe();
+  const j2=jugadores[turno];
+  mostrarTurno(`JUGADOR ${turno+1}`,
+    `vidas: ${"●".repeat(j2.vidas)}  ·  tocá para lanzar`,
+    ()=>{ modo="listo"; });
+}
+
+function finDePartida(){
+  modo="fin";
+  let titulo, sub;
+  if(numJugadores===2){
+    const [a,b]=jugadores.map(p=>p.puntos);
+    titulo = a===b ? "¡EMPATE!" : `¡GANA EL JUGADOR ${a>b?1:2}!`;
+    sub = `J1: ${a}  ·  J2: ${b}  —  tocá para volver al menú`;
+  }else{
+    titulo="FIN DEL ESPECTÁCULO";
+    sub=`puntaje: ${jugadores[0].puntos}  —  tocá para volver al menú`;
+  }
+  mostrarTurno(titulo, sub, verMenu);
+}
+
+function explotar(x,y,color){
+  for(let i=0;i<10;i++){
+    const a=Math.random()*Math.PI*2, v=1.5+Math.random()*2.5;
+    particulas.push({x,y,vx:Math.cos(a)*v,vy:Math.sin(a)*v-1,t:16+Math.random()*10,color});
+  }
+}
+function flash(texto,color){ msgFlash={texto,color,t:110}; }
+
+/* ============ DIBUJO ============ */
+function dibujar(){
+  ctx.fillStyle="#05050d";
+  ctx.fillRect(0,0,W,H);
+
+  // cielo de carpa: franjas tenues arriba
+  ctx.save();
+  ctx.globalAlpha=.10;
+  for(let i=0;i<W;i+=48){
+    ctx.fillStyle = (i/48)%2 ? "#e03a3a" : "#f5e9c8";
+    ctx.beginPath();
+    ctx.moveTo(i,0); ctx.lineTo(i+48,0); ctx.lineTo(i+24,26); ctx.closePath();
+    ctx.fill();
+  }
+  ctx.restore();
+
+  // globos
+  for(let f=0; f<3; f++){
+    const fila=FILAS[f];
+    for(const g of globos[f]){
+      if(!g.viva) continue;
+      const gx=(g.x+offsets[f])%W;
+      dibGlobo(gx, fila.y, fila.color, fila.borde);
+      if(gx<R_GLOBO) dibGlobo(gx+W, fila.y, fila.color, fila.borde);
+      if(gx>W-R_GLOBO) dibGlobo(gx-W, fila.y, fila.color, fila.borde);
+    }
+  }
+
+  // partículas
+  for(const p of particulas){
+    ctx.fillStyle=p.color;
+    ctx.globalAlpha=Math.min(1,p.t/16);
+    ctx.fillRect(p.x-2,p.y-2,4,4);
+  }
+  ctx.globalAlpha=1;
+
+  // piso
+  ctx.fillStyle="#14142a";
+  ctx.fillRect(0,TABLA_Y+FULCRO_H,W,H);
+  ctx.fillStyle="#e03a3a";
+  ctx.fillRect(0,TABLA_Y+FULCRO_H,W,4);
+
+  // subibaja: fulcro + tabla inclinada según dónde está sentado el payaso
+  // (su lado baja por el peso; cuanto más lejos del fulcro, más se inclina)
+  const inclin = (tabla.sentadoDx/(TABLA_W/2))*0.18;
+  ctx.save();
+  ctx.translate(tabla.x, TABLA_Y+2);
+  // fulcro
+  ctx.fillStyle="#c9a13b";
+  ctx.beginPath();
+  ctx.moveTo(-14,FULCRO_H); ctx.lineTo(14,FULCRO_H); ctx.lineTo(0,0); ctx.closePath();
+  ctx.fill();
+  // tabla
+  ctx.rotate(inclin);
+  ctx.fillStyle="#f5e9c8";
+  ctx.fillRect(-TABLA_W/2,-TABLA_H/2,TABLA_W,TABLA_H);
+  ctx.fillStyle="#e03a3a";
+  ctx.fillRect(-TABLA_W/2,-TABLA_H/2,14,TABLA_H);
+  ctx.fillRect(TABLA_W/2-14,-TABLA_H/2,14,TABLA_H);
+  // payaso sentado DONDE cayó
+  dibPayaso(tabla.sentadoDx, -TABLA_H/2-R_PAYASO+2, true);
+  ctx.restore();
+
+  // payaso en vuelo
+  if(vuelo){
+    if(vuelo.esperando){
+      ctx.strokeStyle="rgba(255,210,63,.5)";
+      ctx.setLineDash([4,6]);
+      ctx.beginPath();
+      ctx.moveTo(vuelo.x, vuelo.y+R_PAYASO+4);
+      ctx.lineTo(vuelo.x, TABLA_Y-8);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+    ctx.save();
+    ctx.translate(vuelo.x,vuelo.y);
+    dibPayaso(0,0,false);
+    ctx.restore();
+  }
+
+  // HUD
+  ctx.textBaseline="top";
+  ctx.font="bold 20px 'Courier New',monospace";
+  for(let i=0;i<numJugadores;i++){
+    const activo = i===turno && (modo==="jugando"||modo==="listo");
+    const x = i===0 ? 16 : W-16;
+    ctx.textAlign = i===0 ? "left" : "right";
+    ctx.fillStyle = activo ? "#ffd23f" : "#55557a";
+    ctx.fillText(`J${i+1} ${String(jugadores[i]?.puntos??0).padStart(6,"0")}`, x, 12);
+    ctx.font="14px 'Courier New',monospace";
+    ctx.fillText("●".repeat(Math.max(0,jugadores[i]?.vidas??0)) || "—", x, 36);
+    ctx.font="bold 20px 'Courier New',monospace";
+  }
+  ctx.textAlign="center";
+  ctx.fillStyle="#55557a";
+  ctx.font="12px 'Courier New',monospace";
+  ctx.fillText(`NIVEL ${nivel}`, W/2, 14);
+
+  if(modo==="listo" && vuelo && vuelo.esperando){
+    ctx.fillStyle="#ffd23f";
+    ctx.font="bold 16px 'Courier New',monospace";
+    ctx.fillText("TOCÁ O HACÉ CLIC PARA SOLTAR AL PAYASO", W/2, H-34);
+  }
+  if(msgFlash){
+    ctx.globalAlpha=Math.min(1,msgFlash.t/30);
+    ctx.fillStyle=msgFlash.color;
+    ctx.font="bold 26px 'Courier New',monospace";
+    ctx.fillText(msgFlash.texto, W/2, 210);
+    ctx.globalAlpha=1;
+  }
+}
+
+function dibGlobo(x,y,color,borde){
+  ctx.fillStyle=color;
+  ctx.strokeStyle=borde;
+  ctx.lineWidth=2;
+  ctx.beginPath();
+  ctx.arc(x,y,R_GLOBO,0,Math.PI*2);
+  ctx.fill(); ctx.stroke();
+  ctx.fillStyle="rgba(255,255,255,.45)";
+  ctx.beginPath();
+  ctx.arc(x-4,y-4,3.5,0,Math.PI*2);
+  ctx.fill();
+  ctx.strokeStyle=borde;
+  ctx.beginPath();
+  ctx.moveTo(x,y+R_GLOBO);
+  ctx.lineTo(x,y+R_GLOBO+5);
+  ctx.stroke();
+}
+
+function dibPayaso(x,y,sentado){
+  // cuerpo
+  ctx.fillStyle="#4b9bff";
+  ctx.fillRect(x-8,y-2,16,12);
+  // cara
+  ctx.fillStyle="#f5e9c8";
+  ctx.beginPath(); ctx.arc(x,y-6,8,0,Math.PI*2); ctx.fill();
+  // nariz
+  ctx.fillStyle="#ff4b4b";
+  ctx.beginPath(); ctx.arc(x,y-5,2.6,0,Math.PI*2); ctx.fill();
+  // gorrito
+  ctx.fillStyle="#ffd23f";
+  ctx.beginPath();
+  ctx.moveTo(x-7,y-11); ctx.lineTo(x+7,y-11); ctx.lineTo(x,y-20); ctx.closePath();
+  ctx.fill();
+  // piernas
+  ctx.fillStyle="#e03a3a";
+  if(sentado){ ctx.fillRect(x-8,y+8,5,4); ctx.fillRect(x+3,y+8,5,4); }
+  else{ ctx.fillRect(x-9,y+9,4,6); ctx.fillRect(x+5,y+9,4,6); }
+}
+
+/* ============ LOOP ============ */
+function loop(t){
+  const dt=Math.min(2.2,(t-lastT)/16.67)||1;
+  lastT=t;
+  if(modo==="jugando"||modo==="listo") paso(dt);
+  if(modo!=="menu") dibujar();
+  requestAnimationFrame(loop);
+}
+
+/* escala responsive manteniendo 4:3 */
+function ajustar(){
+  const s=Math.min(innerWidth/(W+8), innerHeight/(H+8), 1.4);
+  cv.style.width=(W*s)+"px";
+  cv.style.height=(H*s)+"px";
+}
+addEventListener("resize",ajustar);
+ajustar();
+verMenu();
+resetGlobos();
+jugadores=[{puntos:0,vidas:VIDAS_INI}];
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>

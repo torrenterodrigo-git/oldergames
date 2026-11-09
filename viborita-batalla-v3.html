@@ -1,0 +1,634 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Viborita Batalla — Último en pie</title>
+<style>
+  :root{
+    --bg:#07090f;
+    --panel:#10141f;
+    --line:#1c2333;
+    --text:#dfe6f3;
+    --dim:#7c87a0;
+    --p1:#ff4d5e;  /* rojo */
+    --p2:#2ee6ff;  /* cian */
+    --p3:#ffd84d;  /* amarillo */
+    --p4:#5dff7a;  /* verde */
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{
+    background:var(--bg);
+    color:var(--text);
+    font-family:"Courier New",ui-monospace,monospace;
+    display:flex;flex-direction:column;align-items:center;
+    min-height:100vh;overflow:hidden;
+  }
+  header{
+    width:100%;max-width:1200px;
+    display:flex;align-items:center;justify-content:space-between;
+    padding:10px 16px;gap:12px;flex-wrap:wrap;
+  }
+  h1{
+    font-size:clamp(15px,2.2vw,22px);
+    letter-spacing:.35em;text-transform:uppercase;font-weight:700;
+  }
+  h1 span{color:var(--p2)}
+  .chips{display:flex;gap:8px;flex-wrap:wrap}
+  .chip{
+    border:1px solid var(--line);border-radius:6px;
+    padding:4px 10px;font-size:12px;letter-spacing:.08em;
+    display:flex;align-items:center;gap:7px;background:var(--panel);
+    transition:opacity .3s;
+  }
+  .chip .dot{width:10px;height:10px;border-radius:2px}
+  .chip.dead{opacity:.35;text-decoration:line-through}
+  .chip .wins{color:var(--dim)}
+  #stage{
+    position:relative;flex:1;width:100%;max-width:1200px;
+    padding:0 16px 14px;display:flex;align-items:center;justify-content:center;
+  }
+  canvas{
+    background:#0a0e18;
+    border:1px solid var(--line);
+    box-shadow:0 0 40px rgba(46,230,255,.06), inset 0 0 60px rgba(0,0,0,.6);
+    image-rendering:pixelated;
+  }
+  /* Overlays */
+  .overlay{
+    position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+    background:rgba(7,9,15,.86);backdrop-filter:blur(2px);
+  }
+  .panel{
+    background:var(--panel);border:1px solid var(--line);border-radius:10px;
+    padding:26px 30px;max-width:560px;width:92%;text-align:center;
+  }
+  .panel h2{letter-spacing:.25em;text-transform:uppercase;font-size:16px;margin-bottom:18px}
+  .row{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-bottom:18px}
+  .opt{
+    border:1px solid var(--line);background:transparent;color:var(--text);
+    font-family:inherit;font-size:14px;padding:9px 16px;border-radius:6px;cursor:pointer;
+    letter-spacing:.06em;
+  }
+  .opt:hover{border-color:var(--dim)}
+  .opt.sel{border-color:var(--p2);color:var(--p2);box-shadow:0 0 12px rgba(46,230,255,.25)}
+  .label{font-size:11px;letter-spacing:.2em;color:var(--dim);text-transform:uppercase;margin-bottom:8px}
+  table.keys{margin:0 auto 20px;border-collapse:collapse;font-size:13px}
+  table.keys td{padding:5px 12px;text-align:left}
+  table.keys .dot{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:7px;vertical-align:middle}
+  kbd{
+    background:#0a0e18;border:1px solid var(--line);border-bottom-width:2px;
+    border-radius:4px;padding:1px 6px;font-family:inherit;font-size:12px;
+  }
+  .big{
+    font-size:16px;padding:13px 34px;border-color:var(--p2);color:var(--p2);
+    letter-spacing:.2em;text-transform:uppercase;
+  }
+  .big:hover{background:rgba(46,230,255,.08)}
+  #countdown{
+    position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+    font-size:110px;font-weight:700;pointer-events:none;
+    text-shadow:0 0 30px rgba(46,230,255,.5);
+  }
+  #winnerName{font-size:22px;letter-spacing:.15em;margin-bottom:6px}
+  #winnerSub{color:var(--dim);font-size:13px;margin-bottom:20px}
+  .hint{color:var(--dim);font-size:12px;margin-top:14px;letter-spacing:.05em}
+  .hidden{display:none!important}
+
+  /* ---- Controles táctiles (tablet) ---- */
+  body{touch-action:manipulation;-webkit-tap-highlight-color:transparent}
+  body.touch-mode{overscroll-behavior:none}
+  body.touch-mode #stage{padding:0 168px 14px}
+  .padwrap{
+    position:fixed;width:150px;height:150px;z-index:20;
+    touch-action:none;display:none;
+  }
+  body.touch-mode .padwrap.on{display:block}
+  .padwrap[data-slot="bl"]{left:10px;bottom:16px}
+  .padwrap[data-slot="br"]{right:10px;bottom:16px}
+  .padwrap[data-slot="tl"]{left:10px;top:76px}
+  .padwrap[data-slot="tr"]{right:10px;top:76px}
+  .padwrap .tag{
+    position:absolute;top:-17px;left:0;width:100%;text-align:center;
+    font-size:10px;letter-spacing:.16em;color:var(--dim);text-transform:uppercase;
+  }
+  .pad{position:relative;width:100%;height:100%}
+  .pad button{
+    position:absolute;width:50px;height:50px;border-radius:9px;
+    background:var(--panel);border:1px solid var(--line);
+    color:var(--text);font-family:inherit;font-size:19px;line-height:1;
+    display:flex;align-items:center;justify-content:center;
+    touch-action:none;-webkit-user-select:none;user-select:none;cursor:pointer;
+  }
+  .pad button.act{filter:brightness(2)}
+  .pad .u{left:50px;top:0}    .pad .d{left:50px;top:100px}
+  .pad .l{left:0;top:50px}    .pad .r{left:100px;top:50px}
+  #padStatus{font-size:12px;color:var(--dim);margin-bottom:16px;line-height:1.7}
+  #padStatus .ok{color:var(--p4)}
+  @media (max-width:900px), (max-height:620px){
+    body.touch-mode #stage{padding:0 124px 10px}
+    .padwrap{width:112px;height:112px}
+    .padwrap[data-slot="tl"],.padwrap[data-slot="tr"]{top:66px}
+    .pad button{width:38px;height:38px;font-size:15px;border-radius:7px}
+    .pad .u{left:37px;top:0}   .pad .d{left:37px;top:74px}
+    .pad .l{left:0;top:37px}   .pad .r{left:74px;top:37px}
+    .panel{padding:20px 18px}
+    table.keys td{padding:4px 7px;font-size:12px}
+  }
+  @media (prefers-reduced-motion: reduce){ *{transition:none!important} }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Viborita <span>Batalla</span></h1>
+  <div class="chips" id="chips"></div>
+</header>
+
+<div id="stage">
+  <canvas id="board"></canvas>
+
+  <!-- Lobby -->
+  <div class="overlay" id="lobby">
+    <div class="panel">
+      <h2>Configurar partida</h2>
+
+      <div class="label">Jugadores</div>
+      <div class="row" id="playerOpts">
+        <button class="opt sel" data-n="2">2</button>
+        <button class="opt" data-n="3">3</button>
+        <button class="opt" data-n="4">4</button>
+      </div>
+
+      <div class="label">Velocidad (cuadros por segundo)</div>
+      <div class="row" id="speedOpts">
+        <button class="opt sel" data-s="1">1 · clásica</button>
+        <button class="opt" data-s="3">3 · ágil</button>
+        <button class="opt" data-s="6">6 · frenética</button>
+      </div>
+
+      <div class="label">Controles en pantalla</div>
+      <div class="row" id="touchOpts">
+        <button class="opt" data-t="1">Activados</button>
+        <button class="opt sel" data-t="0">Desactivados</button>
+      </div>
+
+      <div class="label">Controles</div>
+      <table class="keys" id="keysTable"></table>
+      <div id="padStatus"></div>
+
+      <button class="opt big" id="startBtn">Jugar</button>
+      <div class="hint">El rastro nunca se borra. Chocar = perder. Gana el último en pie.</div>
+    </div>
+  </div>
+
+  <!-- Fin de ronda -->
+  <div class="overlay hidden" id="endScreen">
+    <div class="panel">
+      <div id="winnerName"></div>
+      <div id="winnerSub"></div>
+      <div class="row">
+        <button class="opt big" id="againBtn">Nueva ronda</button>
+        <button class="opt" id="menuBtn">Menú</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="countdown" class="hidden"></div>
+</div>
+
+<!-- D-pads táctiles: P1 abajo-izq, P2 abajo-der, P3 arriba-izq, P4 arriba-der -->
+<div class="padwrap" data-slot="bl" data-p="0"></div>
+<div class="padwrap" data-slot="br" data-p="1"></div>
+<div class="padwrap" data-slot="tl" data-p="2"></div>
+<div class="padwrap" data-slot="tr" data-p="3"></div>
+
+<script>
+(() => {
+  const COLS = 48, ROWS = 32;
+  const canvas = document.getElementById('board');
+  const ctx = canvas.getContext('2d');
+
+  const PLAYERS = [
+    { name:'Jugador 1', css:'--p1', keys:{w:[0,-1], s:[0,1], a:[-1,0], d:[1,0]},
+      keyLabel:'<kbd>W</kbd> <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd>' },
+    { name:'Jugador 2', css:'--p2', keys:{ArrowUp:[0,-1], ArrowDown:[0,1], ArrowLeft:[-1,0], ArrowRight:[1,0]},
+      keyLabel:'<kbd>↑</kbd> <kbd>←</kbd> <kbd>↓</kbd> <kbd>→</kbd>' },
+    { name:'Jugador 3', css:'--p3', keys:{i:[0,-1], k:[0,1], j:[-1,0], l:[1,0]},
+      keyLabel:'<kbd>I</kbd> <kbd>J</kbd> <kbd>K</kbd> <kbd>L</kbd>' },
+    { name:'Jugador 4', css:'--p4', keys:{'8':[0,-1], '5':[0,1], '4':[-1,0], '6':[1,0]},
+      keyLabel:'<kbd>8</kbd> <kbd>4</kbd> <kbd>5</kbd> <kbd>6</kbd> (numérico)' },
+  ];
+  const colorOf = p => getComputedStyle(document.documentElement).getPropertyValue(p.css).trim();
+
+  // ---- Estado ----
+  let numPlayers = 2, speed = 1;
+  let grid, snakes, timer = null, running = false;
+  let tickCount = 0, currentSpeed = 1;
+  const wins = [0,0,0,0];
+
+  const isTouchDevice = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
+  let touchMode = isTouchDevice;   // en tablet arranca activado
+
+  // ---- Audio ----
+  let audioCtx = null;
+  function ensureAudio(){
+    if(!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if(audioCtx.state === 'suspended') audioCtx.resume();
+  }
+  function beep(freq, dur, type='square', vol=0.05, when=0){
+    if(!audioCtx) return;
+    const t = audioCtx.currentTime + when;
+    const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+    o.type = type; o.frequency.value = freq;
+    g.gain.setValueAtTime(vol, t);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g); g.connect(audioCtx.destination);
+    o.start(t); o.stop(t + dur);
+  }
+  // Tick de avance: largo y fuerte, con un armónico para que corte sobre cualquier parlante
+  const tickSound  = () => { beep(520, 0.22, 'square', 0.5); beep(1040, 0.18, 'triangle', 0.35); };
+  const speedUpSound = () => { beep(700, 0.12, 'square', 0.35); beep(1000, 0.15, 'square', 0.35, 0.1); };
+  const crashSound = () => { beep(160, 0.35, 'sawtooth', 0.4); beep(80, 0.5, 'sawtooth', 0.4, 0.05); };
+  const winSound   = () => [523, 659, 784, 1046].forEach((f,i)=>beep(f, 0.2, 'square', 0.3, i*0.13));
+  const countBeep  = (last) => beep(last?880:440, last?0.3:0.15, 'square', 0.3);
+
+  // ---- Layout ----
+  function resize(){
+    const stage = document.getElementById('stage');
+    const cs = getComputedStyle(stage);
+    const availW = stage.clientWidth  - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+    const availH = stage.clientHeight - parseFloat(cs.paddingTop)  - parseFloat(cs.paddingBottom);
+    const cell = Math.max(6, Math.floor(Math.min(availW / COLS, availH / ROWS)));
+    canvas.width = COLS * cell;
+    canvas.height = ROWS * cell;
+    canvas.dataset.cell = cell;
+    draw();
+  }
+  window.addEventListener('resize', resize);
+
+  // ---- Lobby ----
+  function bindOpts(containerId, attr, cb){
+    const c = document.getElementById(containerId);
+    c.addEventListener('click', e => {
+      const b = e.target.closest('.opt'); if(!b) return;
+      c.querySelectorAll('.opt').forEach(x=>x.classList.remove('sel'));
+      b.classList.add('sel');
+      cb(+b.dataset[attr]);
+      renderKeys();
+    });
+  }
+  bindOpts('playerOpts','n', v => { numPlayers = v; buildPads(); renderPadStatus(); });
+  bindOpts('speedOpts','s', v => speed = v);
+  bindOpts('touchOpts','t', v => { touchMode = !!v; applyTouchMode(); });
+
+  function renderKeys(){
+    document.getElementById('keysTable').innerHTML =
+      PLAYERS.slice(0, numPlayers).map(p =>
+        `<tr><td><span class="dot" style="background:${colorOf(p)}"></span>${p.name}</td><td>${p.keyLabel}</td></tr>`
+      ).join('');
+  }
+  renderKeys();
+
+  function renderChips(){
+    document.getElementById('chips').innerHTML =
+      PLAYERS.slice(0, numPlayers).map((p,i) => {
+        const dead = snakes && !snakes[i].alive ? 'dead' : '';
+        return `<div class="chip ${dead}"><span class="dot" style="background:${colorOf(p)}"></span>${p.name}<span class="wins">★ ${wins[i]}</span></div>`;
+      }).join('') +
+      `<div class="chip" id="speedChip">⚡ <span id="speedVal">${currentSpeed.toFixed(1)}</span> c/s</div>`;
+  }
+
+  function updateSpeedChip(flash){
+    const el = document.getElementById('speedVal');
+    if(!el) return;
+    el.textContent = currentSpeed.toFixed(1);
+    if(flash){
+      const chip = document.getElementById('speedChip');
+      chip.style.borderColor = 'var(--p3)';
+      chip.style.color = 'var(--p3)';
+      setTimeout(()=>{ chip.style.borderColor=''; chip.style.color=''; }, 600);
+    }
+  }
+
+  // ---- Juego ----
+  function startPositions(){
+    const m = 4;
+    const pos = [
+      { x:m,        y:Math.floor(ROWS/2), dir:[1,0]  },
+      { x:COLS-1-m, y:Math.floor(ROWS/2), dir:[-1,0] },
+      { x:Math.floor(COLS/2), y:m,        dir:[0,1]  },
+      { x:Math.floor(COLS/2), y:ROWS-1-m, dir:[0,-1] },
+    ];
+    return pos.slice(0, numPlayers);
+  }
+
+  function newRound(){
+    grid = Array.from({length:ROWS}, () => new Array(COLS).fill(-1));
+    snakes = startPositions().map((s,i) => ({
+      x:s.x, y:s.y, dir:s.dir, nextDir:s.dir, alive:true, idx:i
+    }));
+    snakes.forEach(s => grid[s.y][s.x] = s.idx);
+    tickCount = 0;
+    currentSpeed = speed;
+    updateSpeedChip();
+    renderChips();
+    draw();
+    countdown(3, () => {
+      running = true;
+      timer = setInterval(tick, 1000 / currentSpeed);
+    });
+  }
+
+  function countdown(n, done){
+    const el = document.getElementById('countdown');
+    el.classList.remove('hidden');
+    let i = n;
+    const step = () => {
+      if(i === 0){
+        el.textContent = '¡YA!';
+        countBeep(true);
+        setTimeout(()=>{ el.classList.add('hidden'); done(); }, 450);
+        return;
+      }
+      el.textContent = i;
+      countBeep(false);
+      i--;
+      setTimeout(step, 700);
+    };
+    step();
+  }
+
+  function tick(){
+    // 1. Aplicar dirección buffereada
+    const alive = snakes.filter(s => s.alive);
+    alive.forEach(s => s.dir = s.nextDir);
+
+    // 2. Calcular próximas celdas
+    const targets = alive.map(s => ({ s, nx:s.x + s.dir[0], ny:s.y + s.dir[1] }));
+
+    // 3. Detectar choques
+    const dying = new Set();
+    targets.forEach(t => {
+      const {s, nx, ny} = t;
+      if(nx < 0 || nx >= COLS || ny < 0 || ny >= ROWS){ dying.add(s.idx); return; }   // pared
+      if(grid[ny][nx] !== -1){ dying.add(s.idx); return; }                            // rastro
+      // choque de cabezas en la misma celda
+      if(targets.some(o => o !== t && o.nx === nx && o.ny === ny)) dying.add(s.idx);
+    });
+
+    // 4. Mover sobrevivientes (el rastro queda, nunca se borra)
+    targets.forEach(({s, nx, ny}) => {
+      if(dying.has(s.idx)) return;
+      s.x = nx; s.y = ny;
+      grid[ny][nx] = s.idx;
+    });
+
+    let someoneDied = false;
+    dying.forEach(idx => { snakes[idx].alive = false; someoneDied = true; });
+
+    if(someoneDied){ crashSound(); renderChips(); }
+    else tickSound();
+
+    // Aceleración: a partir del avance 10, cada 10 avances sube la velocidad
+    tickCount++;
+    if(running && tickCount >= 10 && tickCount % 10 === 0 && currentSpeed < 12){
+      currentSpeed = Math.min(currentSpeed * 1.3, 12);
+      clearInterval(timer);
+      timer = setInterval(tick, 1000 / currentSpeed);
+      speedUpSound();
+      updateSpeedChip(true);
+    }
+
+    draw();
+
+    const still = snakes.filter(s => s.alive);
+    if(still.length <= 1) endRound(still[0] ?? null);
+  }
+
+  function endRound(winner){
+    clearInterval(timer); timer = null; running = false;
+    const nameEl = document.getElementById('winnerName');
+    const subEl  = document.getElementById('winnerSub');
+    if(winner){
+      wins[winner.idx]++;
+      const p = PLAYERS[winner.idx];
+      nameEl.innerHTML = `<span style="color:${colorOf(p)}">★ Gana ${p.name} ★</span>`;
+      subEl.textContent = 'El último en pie se lleva la ronda.';
+      setTimeout(winSound, 300);
+    } else {
+      nameEl.textContent = 'Empate';
+      subEl.textContent = 'Cayeron todos en el mismo instante.';
+    }
+    renderChips();
+    setTimeout(() => document.getElementById('endScreen').classList.remove('hidden'), 600);
+  }
+
+  // ---- Dibujo ----
+  function draw(){
+    const cell = +canvas.dataset.cell || 16;
+    ctx.fillStyle = '#0a0e18';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // grilla tenue
+    ctx.strokeStyle = 'rgba(255,255,255,0.035)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    for(let x=0; x<=COLS; x++){ ctx.moveTo(x*cell+.5, 0); ctx.lineTo(x*cell+.5, canvas.height); }
+    for(let y=0; y<=ROWS; y++){ ctx.moveTo(0, y*cell+.5); ctx.lineTo(canvas.width, y*cell+.5); }
+    ctx.stroke();
+
+    if(!grid) return;
+
+    // rastros
+    for(let y=0; y<ROWS; y++){
+      for(let x=0; x<COLS; x++){
+        const owner = grid[y][x];
+        if(owner === -1) continue;
+        ctx.fillStyle = colorOf(PLAYERS[owner]);
+        ctx.globalAlpha = 0.85;
+        ctx.fillRect(x*cell+1, y*cell+1, cell-2, cell-2);
+      }
+    }
+    ctx.globalAlpha = 1;
+
+    // cabezas con brillo
+    snakes?.forEach(s => {
+      if(!s.alive) return;
+      const c = colorOf(PLAYERS[s.idx]);
+      ctx.save();
+      ctx.shadowColor = c; ctx.shadowBlur = cell;
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(s.x*cell+2, s.y*cell+2, cell-4, cell-4);
+      ctx.restore();
+    });
+  }
+
+  // ---- Entrada unificada: teclado, táctil y joystick ----
+  function setDir(idx, d){
+    if(!running || !snakes) return;
+    const s = snakes[idx];
+    if(!s || !s.alive) return;
+    if(d[0] === -s.dir[0] && d[1] === -s.dir[1]) return;   // sin reversa de 180°
+    s.nextDir = d;
+  }
+
+  // Teclado
+  document.addEventListener('keydown', e => {
+    if(!running || !snakes) return;
+    ensureAudio();
+    const key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+    for(const s of snakes){
+      if(!s.alive) continue;
+      const d = PLAYERS[s.idx].keys[key];
+      if(d){ setDir(s.idx, d); e.preventDefault(); return; }
+    }
+  });
+
+  // Táctil: d-pads en pantalla
+  const DIRS = { u:[0,-1], d:[0,1], l:[-1,0], r:[1,0] };
+  const ARROW = { u:'▲', d:'▼', l:'◀', r:'▶' };
+
+  function buildPads(){
+    document.querySelectorAll('.padwrap').forEach(w => {
+      const idx = +w.dataset.p;
+      const on = touchMode && idx < numPlayers;
+      w.classList.toggle('on', on);
+      if(!on){ w.innerHTML = ''; return; }
+      const c = colorOf(PLAYERS[idx]);
+      w.innerHTML =
+        `<div class="tag" style="color:${c}">P${idx+1}</div><div class="pad">` +
+        ['u','l','r','d'].map(k =>
+          `<button class="${k}" data-k="${k}" style="border-color:${c};color:${c}">${ARROW[k]}</button>`
+        ).join('') + `</div>`;
+      w.querySelectorAll('button').forEach(btn => {
+        const fire = ev => {
+          ev.preventDefault();
+          ensureAudio();
+          setDir(idx, DIRS[btn.dataset.k]);
+          btn.classList.add('act');
+          setTimeout(() => btn.classList.remove('act'), 110);
+        };
+        btn.addEventListener('pointerdown', fire);
+        btn.addEventListener('touchstart', fire, {passive:false});
+        btn.addEventListener('contextmenu', ev => ev.preventDefault());
+      });
+    });
+  }
+
+  function applyTouchMode(){
+    document.body.classList.toggle('touch-mode', touchMode);
+    buildPads();
+    resize();
+  }
+
+  // Deslizar sobre el tablero: sirve cuando juegan 2 en una tablet
+  let swipeStart = null;
+  canvas.addEventListener('touchstart', e => {
+    if(!touchMode) return;
+    const t = e.changedTouches[0];
+    swipeStart = { x:t.clientX, y:t.clientY, side: t.clientX < window.innerWidth/2 ? 0 : 1 };
+  }, {passive:true});
+  canvas.addEventListener('touchend', e => {
+    if(!swipeStart) return;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - swipeStart.x, dy = t.clientY - swipeStart.y;
+    if(Math.hypot(dx, dy) > 28){
+      const d = Math.abs(dx) > Math.abs(dy) ? [dx>0?1:-1, 0] : [0, dy>0?1:-1];
+      if(swipeStart.side < numPlayers) setDir(swipeStart.side, d);
+    }
+    swipeStart = null;
+  }, {passive:true});
+
+  // Joysticks (Gamepad API): mando 1 → Jugador 1, mando 2 → Jugador 2, etc.
+  const DEAD = 0.45;
+  let lastStart = 0;
+  function readPad(gp){
+    const b = gp.buttons || [];
+    if(b[12]?.pressed) return [0,-1];
+    if(b[13]?.pressed) return [0, 1];
+    if(b[14]?.pressed) return [-1,0];
+    if(b[15]?.pressed) return [1, 0];
+    const ax = gp.axes?.[0] ?? 0, ay = gp.axes?.[1] ?? 0;
+    if(Math.abs(ax) > Math.abs(ay)){ if(Math.abs(ax) > DEAD) return [ax > 0 ? 1 : -1, 0]; }
+    else if(Math.abs(ay) > DEAD) return [0, ay > 0 ? 1 : -1];
+    return null;
+  }
+  function pollPads(){
+    const pads = navigator.getGamepads ? navigator.getGamepads() : [];
+    for(let i = 0; i < pads.length; i++){
+      const gp = pads[i];
+      if(!gp) continue;
+      if(i < numPlayers){
+        const d = readPad(gp);
+        if(d) setDir(i, d);
+      }
+      // Start / A para arrancar o repetir ronda desde cualquier mando
+      const go = gp.buttons?.[9]?.pressed || gp.buttons?.[0]?.pressed;
+      if(go && Date.now() - lastStart > 600){
+        lastStart = Date.now();
+        const lobby = document.getElementById('lobby');
+        const end   = document.getElementById('endScreen');
+        if(!lobby.classList.contains('hidden')) document.getElementById('startBtn').click();
+        else if(!end.classList.contains('hidden')) document.getElementById('againBtn').click();
+      }
+    }
+    requestAnimationFrame(pollPads);
+  }
+  window.addEventListener('gamepadconnected', () => { renderPadStatus(); ensureAudio(); });
+  window.addEventListener('gamepaddisconnected', renderPadStatus);
+  requestAnimationFrame(pollPads);
+
+  function renderPadStatus(){
+    const pads = navigator.getGamepads ? [...navigator.getGamepads()].filter(Boolean) : [];
+    const el = document.getElementById('padStatus');
+    if(!el) return;
+    if(!pads.length){
+      el.innerHTML = 'Joysticks: ninguno detectado. Conectá el mando y apretá un botón para que el navegador lo reconozca.';
+      return;
+    }
+    el.innerHTML = pads.slice(0, 4).map((gp,i) => {
+      const asigned = i < numPlayers
+        ? `<span class="ok">→ ${PLAYERS[i].name}</span>`
+        : '<span>(sin asignar)</span>';
+      const id = (gp.id || 'Mando').slice(0, 26);
+      return `Mando ${i+1}: ${id} ${asigned}`;
+    }).join('<br>');
+  }
+
+  // ---- Botones ----
+  document.getElementById('startBtn').addEventListener('click', () => {
+    ensureAudio();
+    document.getElementById('lobby').classList.add('hidden');
+    renderChips();
+    newRound();
+  });
+  document.getElementById('againBtn').addEventListener('click', () => {
+    ensureAudio();
+    document.getElementById('endScreen').classList.add('hidden');
+    newRound();
+  });
+  document.getElementById('menuBtn').addEventListener('click', () => {
+    document.getElementById('endScreen').classList.add('hidden');
+    document.getElementById('lobby').classList.remove('hidden');
+    grid = null; snakes = null;
+    wins.fill(0);                 // al volver al menú, el marcador arranca de cero
+    currentSpeed = speed;
+    renderChips(); draw();
+  });
+
+  // Reflejar el estado inicial del toggle táctil en el lobby
+  document.querySelectorAll('#touchOpts .opt').forEach(b => {
+    b.classList.toggle('sel', (b.dataset.t === '1') === touchMode);
+  });
+
+  applyTouchMode();
+  renderPadStatus();
+  resize();
+  renderChips();
+  window.addEventListener('orientationchange', () => setTimeout(resize, 250));
+})();
+</script>
+</body>
+</html>
